@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect>
+    <Stream url="wss://57f2-71-127-43-49.ngrok-free.app/"></Stream>
+  </Connect>
+  <Say>Wild!</Say>
+</Response>
