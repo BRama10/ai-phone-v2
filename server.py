@@ -162,8 +162,17 @@ def transcript(ws):
         if data["event"] in ("start"):
             sid = data['streamSid']
             print(f"Media WS: Received event '{data['event']}': {message}")
-            
-            continue
+            ms = get_encoded_payload('initial')
+
+            md = {
+                "event": "media",
+                "streamSid": sid,
+                "media": {
+                    "payload": ms,
+                }
+            }
+            ws.send(json.dumps(md))
+
         if data["event"] == "media":
             if user_turn:
                 # print('user talking')
