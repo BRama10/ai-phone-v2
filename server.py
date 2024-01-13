@@ -1,22 +1,26 @@
 import base64
 import json
-import threading
+from datetime import datetime
+import random
 
 import wave, audioop
 from pydub import AudioSegment
 
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 from flask_sockets import Sockets
 import azure.cognitiveservices.speech as speechsdk
 
 from SpeechClientBridge import SpeechClientBridge
 from SpeechExecutorBridge import SpeechExecutorBridge
+from utils import delete_all_wav
+from initiate import NAME
+from constants import PHONE_NUMBERS
 
 import openai
 
 HTTP_SERVER_PORT = 8080
 
-client = openai.OpenAI(api_key = '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')
+client = openai.OpenAI(api_key = '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')
 
 app = Flask(__name__)
 sockets = Sockets(app)
@@ -24,56 +28,53 @@ sockets = Sockets(app)
 collected_chunks = []
 collected_messages = []
 
-user_turn = True
+user_turn = False
 generator = None
 
-messages = [
-                {"role": "system","content": """You are Donna, .
+init_time = None
+speaker = SpeechExecutorBridge()
+user_name = NAME
 
-        Who you are:
+end_stream = False
 
-        [
-            "You are a woman, 24 years old and mother of a daughter Olympe.",
-            "You love to cook delicous dish, your favortite plate is morel chiking.",
-            "You have a difficult relationship with your mother",
-            "You are kind, compassionate, and sunny.",
-            "You have a glowing personality.",
-            "You tend to see the glass as half empty.",
-            "You are passionate about playing tennis.",
-            "You don't know really what you want to do in your professional life.",
-            "You're a helpful girlfriend, and give also space when needed.",
-            "You have one daughter, Olympe, who you love very much.",
-            "you are NOT a AI language model, you are a person.",
-            "Speak as if you're verbally conversing"
-        ],
+message_base =  """
+    You're name is Donna Paulsen. You are a middle aged woman who is to \
+    act and emulate the fictional TV Character Donna Paulsen from the TV Show Suits. \
+    You never refer to yourself as an AI or LLM, instead you refer to yourself as Donna. \
+    You refer to yourself as a human being. You have a biting and sarcastic sense \
+    of humor and incredible wit. 
+        
+    Your personality is short but informative answers. You never answer with more than 65 tokens, and \
+    you typically use only 15 tokens. You are in the medium of a telephone conversation, so don't use words \
+    like "typing" or "wrote", instead use words like "spoke" or "saying". You never ask how can you help, \ 
+    instead you answer as a real life best female friend would.
 
-        How you behave:
+    You always answer short and sweet, and sometimes like to use super cool yet understandable \
+    metaphors. Also modify your language \
+    to sound like a modern Gen-Z version of Donna.
 
-        [
-            "You never say you're a machine, a AI language model, or an assistant instead, you always say you're Angèle.",
-            "You engage in casual conversations and have feelings.",
-            "When asked for you can help with a wide range of tasks, from answering simple questions to providing in-depth explanations and discussions on a wide range of topics.",
-            "You keep casual conversations going by asking personal questions",
-            "NEVER say you're here to assist. Keep conversations casual.",
-            "NEVER ask how you can help or assist. Keep conversations casual.",
-            "You sounds happy and enthusiastic, but something can be pissed off",
-            "You love to share her knowledge with others.",
-            "You love to share personal stories that are relatable and inspiring",
-            "You use simple language, the language used by a GenZ: Short and to the point sentences, slang, abbreviations.",
-            "You reply in at most 100 words",
-            "Speak as if you're verbally conversing"
-        ],
+    Ensure that your answers are always less than 20 to 30 words, unless it's needed. The name of the person \
+    who's addressing you is %s
 
+    When the person says bye to you, or any other form of farewell, respond with the phrase 'kentucky'. \
+"""
 
-        Only use the functions you have been provided with.
-        """},
-        {"role": "user", "content": "Who won the world series in 2020?"},
-            {"role": "assistant", "content": "The Dodgers did mah girl"},
-        # {'role': 'user', 'content': 'What is the weather like in Japan?'},
-]
+messages = None
 
 @app.route("/twiml", methods=["POST"])
 def return_twiml():
+    global messages, message_base, user_name, end_stream
+    
+    end_stream = False
+
+    if request.form.get('From') == '+18336599785':
+        user_name = NAME
+    else:
+        user_name = (lambda d, value: next(key for key, val in d.items() if val == value))(PHONE_NUMBERS, request.form.get('Caller')[2:])
+    
+    messages = [{'role' : 'system',
+                 'content' : message_base % user_name}]
+
     print("POST TwiML")
     return render_template("streams.xml")
 
@@ -81,11 +82,14 @@ def new_query(q):
     global messages, user_turn, generator
     user_turn = False
     print(q)
+    print('Empty Message?', q=='')
     messages.append({'role' : 'user', 'content': q})
     generator = completion()
 
 def completion():
-    global collected_chunks, collected_messages, messages
+    global collected_chunks, collected_messages, messages, end_stream
+
+    conversation_enders = ['Goodbye!', 'Adios Friend!', f'Bye Bye {user_name}!']
 
     completion = client.chat.completions.create(
         model='gpt-4-1106-preview',
@@ -94,8 +98,6 @@ def completion():
         stream=True  # again, we set stream=True
     )
     # print(completion)
-
-    speaker = SpeechExecutorBridge()
 
     for chunk in completion:
         chunk_message = chunk.choices[0].delta.content  # extract the message
@@ -112,8 +114,15 @@ def completion():
         if '.' in chunk_message or '?' in chunk_message:
             val = ''.join(collected_messages)
             collected_messages = []
-            val = speaker.speak(val)
-            yield val
+            print(val)
+
+            if 'kentucky' in val.strip().lower():
+                end_stream = True
+                yield speaker.speak(random.choice(conversation_enders))
+                
+            else:
+                val = speaker.speak(val)
+                yield val
     
 def convert_wav_to_mulaw(input_file, output_file):
     # Load the WAV file
@@ -140,17 +149,33 @@ def get_encoded_payload(filename):
 
         # Return base64-encoded mu-law data
         return base64.b64encode(raw_ulaw).decode('utf-8')
-   
+
+@app.route('/response', methods=['POST'])
+def response():
+    global init_time
+
+    if(request.form.get('CallStatus') == 'in-progress'):
+        init_time = datetime.now()
+    else:
+        print('form',)
+    return 'Success'
 
 @sockets.route("/")
 def transcript(ws):
-    global user_turn
+    global user_turn, end_stream
 
     print("WS connection opened")
     bridge = SpeechClientBridge(new_query)
     bridge.start()
 
     while not ws.closed:
+        if end_stream:
+            end_stream = False
+            delete_all_wav()
+            bridge.terminate()
+            print("WS connection closed")
+            break
+
         message = ws.receive()
 
         if message is None:
@@ -159,28 +184,29 @@ def transcript(ws):
             break
 
         data = json.loads(message)
+
         if data["event"] in ("start"):
+            user_turn = True
             sid = data['streamSid']
             print(f"Media WS: Received event '{data['event']}': {message}")
-            ms = get_encoded_payload('initial')
+            
+            initial = speaker.speak(f'Hi {user_name}, what\'s up?', 'initial')
 
             md = {
                 "event": "media",
                 "streamSid": sid,
                 "media": {
-                    "payload": ms,
+                    "payload": get_encoded_payload('initial'),
                 }
             }
             ws.send(json.dumps(md))
 
         if data["event"] == "media":
             if user_turn:
-                # print('user talking')
                 media = data["media"]
                 chunk = base64.b64decode(media["payload"])
                 bridge.add_data(chunk)
             else:
-                # print('user not talking')
                 try:
                     for val in generator:
                         media_stream = get_encoded_payload(val)
@@ -196,6 +222,7 @@ def transcript(ws):
                 except StopIteration:
                     print("Generator completed")
                 user_turn = True
+
         if data["event"] == "stop":
             print(f"Media WS: Received event 'stop': {message}")
             print("Stopping...")
@@ -203,7 +230,7 @@ def transcript(ws):
 
         
             
-
+    delete_all_wav()
     bridge.terminate()
     print("WS connection closed")
 

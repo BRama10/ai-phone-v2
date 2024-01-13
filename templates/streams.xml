@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Response>
+  <!-- <Say>This conversation is not performed by a human, or with any intent to deceive.</Say> -->
   <Connect>
-    <Stream url="wss://57f2-71-127-43-49.ngrok-free.app/"></Stream>
+    <Stream url="wss://6dfa-71-127-43-49.ngrok-free.app/"></Stream>
   </Connect>
-  <Say>Wild!</Say>
+  <Hangup/>
 </Response>

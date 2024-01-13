@@ -6,14 +6,17 @@ class SpeechClientBridge:
     def __init__(self, on_response):
         self._queue = queue.Queue()
         self._ended = False
+        
         config = speechsdk.SpeechConfig(subscription='60e5efd485b64bf78aee24ccd9874b47', region='eastus')
-        audio_format = speechsdk.audio.AudioStreamFormat(samples_per_second=16000,
+        config.set_property(speechsdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, "1700")
+        config.set_profanity(speechsdk.ProfanityOption.Raw)
+        audio_format = speechsdk.audio.AudioStreamFormat(samples_per_second=8000,
                                                      bits_per_sample=8,
                                                      channels=1,
                                                      wave_stream_format=speechsdk.AudioStreamWaveFormat.MULAW)
         self.stream = speechsdk.audio.PushAudioInputStream(stream_format=audio_format)
         self.audio_config = speechsdk.audio.AudioConfig(stream=self.stream)
-
+        speechsdk.PropertyId
         self.speech_recognizer = speechsdk.SpeechRecognizer(speech_config=config, audio_config=self.audio_config)
 
         self.new_user_query = on_response
