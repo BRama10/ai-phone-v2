@@ -20,7 +20,9 @@ import openai
 
 HTTP_SERVER_PORT = 8080
 
-client = openai.OpenAI(api_key = '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')
+OPENAI_KEY = None
+
+client = openai.OpenAI(api_key = OPENAI_KEY)
 
 app = Flask(__name__)
 sockets = Sockets(app)

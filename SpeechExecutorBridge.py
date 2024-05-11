@@ -2,13 +2,16 @@ import os
 import azure.cognitiveservices.speech as speechsdk
 import string, random
 
+SUBSCRIPTION = None
+REGION = None
+
 def generate_random_string():
     """Generate a random 10-character string."""
     return ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(10))
 
 class SpeechExecutorBridge:
     def __init__(self):
-        self.speech_config = speechsdk.SpeechConfig(subscription='60e5efd485b64bf78aee24ccd9874b47', region='eastus')
+        self.speech_config = speechsdk.SpeechConfig(subscription=SUBSCRIPTION, region=REGION)
         self.speech_config.set_speech_synthesis_output_format(speechsdk.SpeechSynthesisOutputFormat.Riff24Khz16BitMonoPcm)
 
         self.audio_config = speechsdk.audio.AudioOutputConfig(use_default_speaker=True)

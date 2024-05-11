@@ -2,12 +2,15 @@ import queue
 import azure.cognitiveservices.speech as speechsdk
 import numpy as np
 
+SUBSCRIPTION = None
+REGION = None
+
 class SpeechClientBridge:
     def __init__(self, on_response):
         self._queue = queue.Queue()
         self._ended = False
         
-        config = speechsdk.SpeechConfig(subscription='60e5efd485b64bf78aee24ccd9874b47', region='eastus')
+        config = speechsdk.SpeechConfig(subscription=SUBSCRIPTION, region=REGION)
         config.set_property(speechsdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, "1700")
         config.set_profanity(speechsdk.ProfanityOption.Raw)
         audio_format = speechsdk.audio.AudioStreamFormat(samples_per_second=8000,
